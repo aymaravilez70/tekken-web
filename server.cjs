@@ -42,6 +42,18 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const pathname = decodeURIComponent(url.pathname);
 
+  // Capture remote browser logs
+  if (pathname === '/api/log' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      console.log(`[CLIENT LOG] ${body.trim()}`);
+      res.writeHead(204);
+      res.end();
+    });
+    return;
+  }
+
   // Serve the Tekken ISO directly with full Range and HEAD support
   if (pathname === '/tekken.iso' || pathname === '/tekken5.iso' || pathname === '/tekken6.iso') {
     if (!fs.existsSync(ISO_PATH)) {

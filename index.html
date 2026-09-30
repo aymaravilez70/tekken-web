@@ -484,13 +484,52 @@
     const startOverlay = document.getElementById('startOverlay');
     const canvas = document.getElementById('canvas');
 
+    function sendToServer(msg) {
+      try {
+        fetch('/api/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: String(msg)
+        }).catch(() => {});
+      } catch(e) {}
+    }
+
     function log(msg) {
       console.log(msg);
+      sendToServer(msg);
       if (logBox) {
         logBox.textContent += '\n' + msg;
         logBox.scrollTop = logBox.scrollHeight;
       }
     }
+
+    const _origLog = console.log;
+    const _origWarn = console.warn;
+    const _origErr = console.error;
+
+    console.log = function(...args) {
+      const line = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ');
+      if (line.includes('[PPSSPP') || line.includes('[ADHOC')) {
+        sendToServer(line);
+      }
+      _origLog.apply(console, args);
+    };
+
+    console.warn = function(...args) {
+      const line = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ');
+      sendToServer('[WARN] ' + line);
+      _origWarn.apply(console, args);
+    };
+
+    console.error = function(...args) {
+      const line = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ');
+      sendToServer('[ERROR] ' + line);
+      _origErr.apply(console, args);
+    };
+
+    window.addEventListener('error', (e) => {
+      sendToServer('[WINDOW ERROR] ' + e.message + ' at ' + e.filename + ':' + e.lineno);
+    });
 
     const gameHint = document.getElementById('gameHint');
     const viewport = document.getElementById('viewport');
@@ -834,7 +873,7 @@ ShowDeveloperMenu = False
           log('[PPSSPP] ' + text);
         },
         printErr: function(text) {
-          console.warn('[PPSSPP ERR] ' + text);
+          log('[PPSSPP ERR] ' + text);
         }
       };
 
