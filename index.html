@@ -739,7 +739,8 @@
                 savedMac = `02:00:00:${randByte()}:${randByte()}:${randByte()}`;
                 localStorage.setItem('tekken_mac', savedMac);
               }
-              const adhocServer = localStorage.getItem('tekken_server') || '38.54.80.95';
+              const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+              const adhocServer = isLocalHost ? '127.0.0.1' : (localStorage.getItem('tekken_server') || '38.54.80.95');
 
               const iniContent = `[General]
 FirstRun = False

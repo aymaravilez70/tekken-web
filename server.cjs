@@ -125,6 +125,40 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`[TEKKEN 6 WEB] Server running at http://127.0.0.1:${PORT}/`);
-  console.log(`[TEKKEN 6 WEB] ISO verified at: ${ISO_PATH}`);
+  console.log(`[TEKKEN WEB] Server running at http://127.0.0.1:${PORT}/`);
+  console.log(`[TEKKEN WEB] ISO verified at: ${ISO_PATH}`);
 });
+
+// Ad-Hoc WebSocket Relay on port 27312
+try {
+  const WebSocket = require('ws');
+  const wssAdhoc = new WebSocket.Server({ port: 27312 }, () => {
+    console.log(`[ADHOC RELAY] WebSocket Ad-Hoc Relay running at ws://127.0.0.1:27312/`);
+  });
+
+  const rooms = new Map();
+  wssAdhoc.on('connection', (ws, req) => {
+    const roomName = 'default';
+    if (!rooms.has(roomName)) rooms.set(roomName, new Set());
+    const room = rooms.get(roomName);
+    room.add(ws);
+    console.log(`[ADHOC] Jugador conectado a sala virtual. Jugadores activos: ${room.size}`);
+
+    ws.on('message', (msg, isBinary) => {
+      for (const peer of room) {
+        if (peer !== ws && peer.readyState === WebSocket.OPEN) {
+          peer.send(msg, { binary: isBinary });
+        }
+      }
+    });
+
+    ws.on('close', () => {
+      room.delete(ws);
+      console.log(`[ADHOC] Jugador desconectado. Restantes en sala: ${room.size}`);
+    });
+
+    ws.on('error', (err) => console.warn('[ADHOC ERR]', err.message));
+  });
+} catch (e) {
+  console.warn('[ADHOC RELAY] Could not start on port 27312:', e.message);
+}
