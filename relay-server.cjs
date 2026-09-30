@@ -232,11 +232,51 @@ function createAdhocServer(existingHttpServer = null, wsPort = PORT) {
     });
   });
 
+  // Start P2P Data Relay on port 10555 for direct player-to-player match packets
+  startP2PRelay(10555);
+
   return { server, wss };
+}
+
+function startP2PRelay(port = 10555) {
+  let wss;
+  try {
+    wss = new WebSocket.Server({ port, handleProtocols: () => 'binary' });
+    const peers = new Set();
+
+    wss.on('connection', (ws, req) => {
+      peers.add(ws);
+      console.log(`[P2P 10555] [+] Peer conectado desde ${req.socket.remoteAddress}. Total peers: ${peers.size}`);
+
+      ws.on('message', (msg, isBinary) => {
+        for (const peer of peers) {
+          if (peer !== ws && peer.readyState === WebSocket.OPEN) {
+            peer.send(msg, { binary: isBinary });
+          }
+        }
+      });
+
+      ws.on('close', () => {
+        peers.delete(ws);
+        console.log(`[P2P 10555] [-] Peer desconectado. Restantes: ${peers.size}`);
+      });
+
+      ws.on('error', (err) => {
+        console.warn(`[P2P 10555] Error: ${err.message}`);
+      });
+    });
+
+    wss.on('listening', () => {
+      console.log(`⚡ [P2P RELAY 10555] Servidor P2P WebSocket activo en puerto ${port}`);
+    });
+  } catch (err) {
+    console.warn(`[P2P 10555] Error al iniciar en puerto ${port}:`, err.message);
+  }
+  return wss;
 }
 
 if (require.main === module) {
   createAdhocServer(null, PORT);
 }
 
-module.exports = { createAdhocServer };
+module.exports = { createAdhocServer, startP2PRelay };
