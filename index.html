@@ -617,7 +617,11 @@
 
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        const isoUrl = urlParams.get('rom') || '/tekken.iso';
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const HF_URL = 'https://huggingface.co/datasets/Aymar5645/tekken-web/resolve/main/Tekken%20-%20Dark%20Resurrection%20(USA)%20(En%2CFr%2CDe%2CEs%2CIt).iso';
+        const defaultUrl = isLocal ? '/tekken.iso' : HF_URL;
+        const isoUrl = urlParams.get('rom') || defaultUrl;
+        log('🔗 Descargando juego desde: ' + (isoUrl === '/tekken.iso' ? 'Servidor local' : 'Hugging Face CDN'));
         gameData = await getGameBytesWithCache(isoUrl);
         log('✅ Datos de ISO listos: ' + (gameData.byteLength / 1048576).toFixed(1) + ' MB');
 
