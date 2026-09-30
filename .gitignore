@@ -1,0 +1,23 @@
+# Ignore large game files (hosted on Hugging Face / CDN)
+*.iso
+*.cso
+*.7z
+*.zip
+*.bin
+*.pmf
+
+# Ignore temporary debug and test files
+*.png
+*.bmp
+*.txt
+*.ps1
+test_*.cjs
+dump_*.cjs
+check_*.cjs
+inspect_*.cjs
+capture_*.cjs
+run_check_tree.cjs
+
+# Node & OS
+node_modules/
+.DS_Store

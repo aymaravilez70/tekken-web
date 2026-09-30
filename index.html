@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tekken: Dark Resurrection - PSP Web Online</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #08090d;
+      --card-bg: rgba(18, 16, 26, 0.92);
+      --accent: #e63946;
+      --accent-glow: rgba(230, 57, 70, 0.55);
+      --purple: #8338ec;
+      --purple-glow: rgba(131, 56, 236, 0.45);
+      --gold: #ffb703;
+      --border: rgba(255, 255, 255, 0.12);
+      --text: #f1faee;
+      --text-dim: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 12%, #221438 0%, var(--bg) 80%);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 28px;
+      background: rgba(12, 10, 18, 0.95);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      z-index: 20;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #fff;
+      text-transform: uppercase;
+      text-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .brand-logo span {
+      color: var(--accent);
+    }
+
+    .badge {
+      background: rgba(131, 56, 236, 0.2);
+      color: #c77dff;
+      border: 1px solid rgba(131, 56, 236, 0.4);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 350px;
+      gap: 20px;
+      padding: 24px;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 1100px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stage-container {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .game-viewport {
+      position: relative;
+      background: #000;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(131, 56, 236, 0.2);
+      aspect-ratio: 16 / 9;
+      width: 100%;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #000;
+      outline: none;
+    }
+
+    .game-hint {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 14, 28, 0.92);
+      border: 1px solid rgba(230, 57, 70, 0.5);
+      color: #f1faee;
+      padding: 7px 18px;
+      border-radius: 20px;
+      font-size: 12.5px;
+      backdrop-filter: blur(8px);
+      z-index: 5;
+      display: none;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+      animation: pulseHint 2.5s infinite;
+    }
+    @keyframes pulseHint {
+      0%, 100% { opacity: 0.95; }
+      50% { opacity: 0.6; }
+    }
+
+    .game-overlay {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, rgba(28, 16, 44, 0.95) 0%, rgba(8, 9, 13, 0.98) 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      z-index: 10;
+      backdrop-filter: blur(10px);
+      text-align: center;
+      padding: 24px;
+      transition: opacity 0.3s ease;
+    }
+
+    .overlay-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 42px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 3px;
+      text-shadow: 0 0 24px var(--accent-glow);
+      text-transform: uppercase;
+    }
+
+    .overlay-title span {
+      color: var(--accent);
+    }
+
+    .overlay-subtitle {
+      font-size: 14px;
+      color: var(--text-dim);
+      max-width: 520px;
+      line-height: 1.6;
+    }
+
+    .play-btn {
+      background: linear-gradient(135deg, var(--accent) 0%, #9b111e 100%);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      padding: 16px 48px;
+      border-radius: 8px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 8px 32px var(--accent-glow);
+      transition: all 0.25s ease;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .play-btn:hover {
+      transform: scale(1.04);
+      box-shadow: 0 12px 42px rgba(230, 57, 70, 0.75);
+    }
+
+    .status-text {
+      font-size: 13px;
+      color: #ffd166;
+      font-family: monospace;
+      min-height: 20px;
+    }
+
+    .progress-bar-container {
+      width: 320px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--purple), var(--accent));
+      transition: width 0.15s ease;
+    }
+
+    .stage-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .sidebar {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      height: fit-content;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.35);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px 8px;
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      border-bottom: 2px solid var(--accent);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-content {
+      padding: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .tab-content.active {
+      display: flex;
+    }
+
+    .section-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 12.5px;
+    }
+
+    .key-badge {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 11.5px;
+      color: #e2e8f0;
+    }
+
+    .info-card {
+      background: rgba(131, 56, 236, 0.12);
+      border: 1px solid rgba(131, 56, 236, 0.35);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #d8b4fe;
+    }
+
+    #consoleLog {
+      background: #050608;
+      border: 1px solid var(--border);
+      padding: 10px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #4ade80;
+      height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">TEKKEN: <span>DARK RESURRECTION</span></div>
+      <div class="badge">Web Edition • 60 FPS</div>
+    </div>
+    <div class="header-actions">
+      <div id="gamepadStatus" style="font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 6px;">
+        <span id="padDot" style="width: 8px; height: 8px; border-radius: 50%; background: #475569; display: inline-block;"></span>
+        <span id="padText">Mando desconectado</span>
+      </div>
+      <button class="btn" onclick="toggleTheaterMode()">🖥️ Modo Teatro</button>
+      <button class="btn" onclick="toggleFullscreen()">⛶ Pantalla Completa</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="stage-container">
+      <div class="game-viewport" id="viewport">
+        <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+        <div class="game-hint" id="gameHint">🎮 Pulsa ENTER o Z (o botón A en tu mando) para confirmar en pantalla</div>
+        
+        <div class="game-overlay" id="startOverlay">
+          <div class="overlay-title">TEKKEN: <span>DARK RESURRECTION</span></div>
+          <div class="overlay-subtitle">Pro Evolution en combate: Tekken 5 Dark Resurrection corriendo en tu navegador web a 60 FPS con soporte completo de mandos.</div>
+          
+          <button class="play-btn" id="btnPlay" onclick="startGame()">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            JUGAR AHORA
+          </button>
+
+          <div class="progress-bar-container" id="progressBarBox">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+          
+          <div class="status-text" id="statusLabel">Listo para inicializar</div>
+        </div>
+      </div>
+
+      <div class="stage-bar">
+        <span>⚡ Motor: PPSSPP WebAssembly (SDL2 + WebGL2)</span>
+        <span>💾 VFS: Emscripten MEMFS Direct</span>
+        <span>🎮 FPS: 60 FPS Objetivo</span>
+      </div>
+    </div>
+
+    <aside class="sidebar">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('controles')">Controles</button>
+        <button class="tab-btn" onclick="switchTab('online')">Online</button>
+        <button class="tab-btn" onclick="switchTab('log')">Registro</button>
+      </div>
+
+      <div class="tab-content active" id="tab-controles">
+        <div class="section-title">Controles (Teclado y Mando)</div>
+        <div class="control-row"><span>Movimiento (D-Pad / Stick)</span><span class="key-badge">Flechas / Mando D-Pad</span></div>
+        <div class="control-row"><span>Cruz (✕ / Aceptar)</span><span class="key-badge">Z / Espacio / Mando A</span></div>
+        <div class="control-row"><span>Círculo (○ / Cancelar)</span><span class="key-badge">X / C / Mando B</span></div>
+        <div class="control-row"><span>Cuadrado (□ / Golpe Izq)</span><span class="key-badge">A / Mando X</span></div>
+        <div class="control-row"><span>Triángulo (△ / Golpe Der)</span><span class="key-badge">S / Mando Y</span></div>
+        <div class="control-row"><span>L-Trigger (L1)</span><span class="key-badge">Q / Mando LB</span></div>
+        <div class="control-row"><span>R-Trigger (R1)</span><span class="key-badge">W / Mando RB</span></div>
+        <div class="control-row"><span>START</span><span class="key-badge">Enter / Mando Start</span></div>
+        <div class="control-row"><span>SELECT</span><span class="key-badge">Shift / Mando Select</span></div>
+
+        <div class="info-card">
+          🎮 <strong>Mando Xbox / PlayStation:</strong> Se conecta automáticamente por Web Gamepad API. Si la pantalla te muestra el aviso de MemoryStick, presiona <strong>ENTER</strong> en tu teclado o <strong>A</strong> en tu mando para empezar.
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-online">
+        <div class="section-title">Modo Multijugador (Ad-Hoc)</div>
+        <div style="font-size: 13px; color: var(--text-dim); line-height: 1.6;">
+          <p>• <strong>Dentro del juego:</strong> Ve al menú principal ➡️ <strong>NETWORK</strong>.</p>
+          <p>• <strong>Modo Combate:</strong> Uno de los jugadores selecciona <em>Wait for Challenger</em> y el otro <em>Search for Challenger</em>.</p>
+          <p>• <strong>Estado de Red:</strong> Conectado a la red de emulación inalámbrica PSP.</p>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-log">
+        <div class="section-title">Consola en Vivo</div>
+        <div id="consoleLog">Sistema listo para Tekken: Dark Resurrection.</div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const logBox = document.getElementById('consoleLog');
+    const statusLabel = document.getElementById('statusLabel');
+    const progressBarBox = document.getElementById('progressBarBox');
+    const progressBar = document.getElementById('progressBar');
+    const btnPlay = document.getElementById('btnPlay');
+    const startOverlay = document.getElementById('startOverlay');
+    const canvas = document.getElementById('canvas');
+
+    function log(msg) {
+      console.log(msg);
+      if (logBox) {
+        logBox.textContent += '\n' + msg;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+
+    const gameHint = document.getElementById('gameHint');
+    const viewport = document.getElementById('viewport');
+
+    function showHint() {
+      if (gameHint) {
+        gameHint.style.display = 'block';
+        setTimeout(() => {
+          gameHint.style.transition = 'opacity 0.6s ease';
+          gameHint.style.opacity = '0';
+          setTimeout(() => { gameHint.style.display = 'none'; }, 600);
+        }, 18000);
+      }
+    }
+
+    function hideOverlay() {
+      if (startOverlay && startOverlay.style.display !== 'none') {
+        log('🎬 Ocultando pantalla de carga...');
+        startOverlay.style.opacity = '0';
+        setTimeout(() => {
+          startOverlay.style.display = 'none';
+          canvas.focus();
+          showHint();
+        }, 300);
+      }
+    }
+
+    startOverlay.addEventListener('click', () => {
+      if (!btnPlay || btnPlay.style.display === 'none') {
+        hideOverlay();
+      }
+    });
+
+    function updateStatus(text) {
+      if (statusLabel) statusLabel.textContent = text;
+      log('[ESTADO] ' + text);
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    function toggleFullscreen() {
+      const el = document.getElementById('viewport');
+      if (!document.fullscreenElement) {
+        el.requestFullscreen().catch(err => alert("Error fullscreen: " + err.message));
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    function toggleTheaterMode() {
+      const sidebar = document.querySelector('.sidebar');
+      const main = document.querySelector('main');
+      if (sidebar.style.display === 'none') {
+        sidebar.style.display = 'flex';
+        main.style.gridTemplateColumns = '1fr 350px';
+      } else {
+        sidebar.style.display = 'none';
+        main.style.gridTemplateColumns = '1fr';
+      }
+    }
+
+    window.addEventListener("gamepadconnected", (e) => {
+      document.getElementById('padDot').style.background = '#22c55e';
+      document.getElementById('padText').textContent = e.gamepad.id.slice(0, 22) + '...';
+      log('🎮 Mando conectado: ' + e.gamepad.id);
+    });
+
+    window.addEventListener("gamepaddisconnected", () => {
+      document.getElementById('padDot').style.background = '#475569';
+      document.getElementById('padText').textContent = 'Mando desconectado';
+      log('🎮 Mando desconectado');
+    });
+
+    let gameData = null;
+
+    async function getGameBytesWithCache(url) {
+      const cacheName = 'tekken-dr-v2';
+      let cache = null;
+      try {
+        if ('caches' in window) {
+          cache = await caches.open(cacheName);
+          const cachedResponse = await cache.match(url);
+          if (cachedResponse) {
+            updateStatus('Cargando Tekken: Dark Resurrection desde la memoria caché...');
+            progressBarBox.style.display = 'block';
+            progressBar.style.width = '100%';
+            const buffer = await cachedResponse.arrayBuffer();
+            log('⚡ Cargado instantáneamente desde la caché local (' + (buffer.byteLength / 1048576).toFixed(1) + ' MB)');
+            return new Uint8Array(buffer);
+          }
+        }
+      } catch(e) {
+        log('Cache API omitida: ' + e.message);
+      }
+
+      updateStatus('Transfiriendo Tekken: Dark Resurrection...');
+      progressBarBox.style.display = 'block';
+      progressBar.style.width = '2%';
+
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+
+      const contentLength = response.headers.get('content-length');
+      const total = contentLength ? parseInt(contentLength, 10) : 422379520;
+      const fullArray = new Uint8Array(total);
+      let loaded = 0;
+
+      const reader = response.body.getReader();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fullArray.set(value, loaded);
+        loaded += value.length;
+        const pct = Math.min(100, Math.round((loaded / total) * 100));
+        progressBar.style.width = pct + '%';
+        const mbLoaded = (loaded / 1048576).toFixed(0);
+        const mbTotal = (total / 1048576).toFixed(0);
+        statusLabel.textContent = `Transfiriendo juego: ${pct}% (${mbLoaded} / ${mbTotal} MB)`;
+      }
+
+      updateStatus('Inicializando emulador...');
+      if (cache) {
+        try {
+          cache.put(url, new Response(fullArray.slice().buffer))
+            .then(() => log('💾 Tekken: Dark Resurrection guardado en caché local.'))
+            .catch(e => console.warn('Cache warning:', e));
+        } catch(e) {}
+      }
+      return fullArray;
+    }
+
+    async function startGame() {
+      btnPlay.disabled = true;
+      btnPlay.style.display = 'none';
+
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isoUrl = urlParams.get('rom') || '/tekken.iso';
+        gameData = await getGameBytesWithCache(isoUrl);
+        log('✅ Datos de ISO listos: ' + (gameData.byteLength / 1048576).toFixed(1) + ' MB');
+
+        updateStatus('Iniciando motor PPSSPP...');
+        initPPSSPP();
+      } catch (err) {
+        log('❌ Error: ' + err.message);
+        updateStatus('Error al cargar: ' + err.message);
+        btnPlay.disabled = false;
+        btnPlay.style.display = 'flex';
+      }
+    }
+
+    // Ensure WebGL context is created with alpha: false so 3D scene never becomes transparent/black
+    if (!window.__webglPatched) {
+      window.__webglPatched = true;
+      const origGetContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(type, attribs) {
+        if (type === 'webgl2' || type === 'webgl') {
+          attribs = Object.assign({}, attribs, { alpha: false, depth: true, stencil: true });
+        }
+        return origGetContext.call(this, type, attribs);
+      };
+
+      // Keep canvas always focused on keypresses
+      window.addEventListener('keydown', (e) => {
+        if (document.activeElement !== canvas) {
+          canvas.focus();
+        }
+      });
+    }
+
+    function initPPSSPP() {
+      var Module = {
+        canvas: canvas,
+        arguments: ['/games/tekken.iso'],
+        locateFile: function(path) {
+          if (path.endsWith('.wasm')) return '/ppsspp/PPSSPPSDL.wasm';
+          if (path.endsWith('.data')) return '/ppsspp/PPSSPPSDL.data';
+          return '/ppsspp/' + path;
+        },
+        preRun: [
+          function() {
+            window.FS = FS;
+            log('[FS] Registrando /games/tekken.iso en el sistema de archivos virtual...');
+            try {
+              FS.mkdirTree('/games');
+              FS.createDataFile('/games', 'tekken.iso', gameData, true, false, false);
+              log('✅ [FS] ¡Tekken: Dark Resurrection montado exitosamente en /games/tekken.iso!');
+
+              // Create PSP memory stick directory structure
+              const pspDirs = [
+                '/home/web_user/PSP/SYSTEM',
+                '/home/web_user/PSP/SAVEDATA',
+                '/home/web_user/PSP/GAME',
+                '/home/web_user/.config/ppsspp/PSP/SYSTEM',
+                '/home/web_user/.config/ppsspp/PSP/SAVEDATA',
+                '/home/web_user/.config/ppsspp/PSP/GAME',
+                '/PSP/SYSTEM',
+                '/PSP/SAVEDATA',
+                '/PSP/GAME'
+              ];
+              for (const d of pspDirs) {
+                try { FS.mkdirTree(d); } catch(e) {}
+              }
+
+              // Create MEMSTICK.IND and MSTK_PRO.IND marker files so PSP checks pass
+              const indPaths = [
+                '/home/web_user/MEMSTICK.IND',
+                '/home/web_user/MSTK_PRO.IND',
+                '/home/web_user/.config/ppsspp/MEMSTICK.IND',
+                '/home/web_user/.config/ppsspp/MSTK_PRO.IND',
+                '/MEMSTICK.IND',
+                '/MSTK_PRO.IND'
+              ];
+              for (const p of indPaths) {
+                try { FS.writeFile(p, new Uint8Array(0)); } catch(e) {}
+              }
+
+              // Write initial ppsspp.ini in full KIOSK / AUTOPLAY mode (Clean Native Web View)
+              const iniContent = `[General]
+FirstRun = False
+RunCount = 100
+EnableSound = True
+AutoLoadSaveState = 0
+Language = 1
+ConfirmOn = False
+
+[Control]
+ShowTouchControls = False
+ShowTouchCircle = False
+ShowTouchCross = False
+ShowTouchSquare = False
+ShowTouchTriangle = False
+ShowTouchStart = False
+ShowTouchSelect = False
+ShowTouchLTrigger = False
+ShowTouchRTrigger = False
+ShowTouchPause = False
+ShowTouchUnthrottle = False
+ShowTouchDpad = False
+TouchButtonOpacity = 0
+TouchButtonHideSeconds = 0
+AutoCenterTouchAnalog = False
+
+[Graphics]
+GraphicsBackend = 0
+RenderingMode = 1
+SoftwareRendering = False
+HardwareTransform = True
+SoftwareSkinning = True
+TextureFiltering = 1
+BufferFilter = 1
+InternalResolution = 1
+HighQualityDepth = True
+FrameSkip = 0
+AutoFrameSkip = False
+FastMemory = True
+IgnoreBadMemAccess = True
+ShowFPSCounter = 0
+
+[SystemParam]
+PSPModel = 0
+PSPFirmwareVersion = 660
+NickName = Aymar
+Language = 1
+ButtonPreference = 1
+EncryptSave = False
+
+[UI]
+PauseMenuExitsEmulator = False
+ShowDeveloperMenu = False
+`;
+              const iniPaths = [
+                '/home/web_user/PSP/SYSTEM/ppsspp.ini',
+                '/home/web_user/.config/ppsspp/PSP/SYSTEM/ppsspp.ini',
+                '/PSP/SYSTEM/ppsspp.ini',
+                '/.config/ppsspp/PSP/SYSTEM/ppsspp.ini',
+                '/assets/ppsspp.ini',
+                '/ppsspp.ini'
+              ];
+              for (const ip of iniPaths) {
+                try { FS.writeFile(ip, iniContent); } catch(e) {}
+              }
+              log('✅ [CONFIG] Modo Kiosk / Autoplay limpio aplicado (sin botones táctiles ni menús).');
+
+            } catch(e) {
+              log('⚠️ Error al montar en FS: ' + e.message);
+            }
+          }
+        ],
+        postRun: [
+          function() {
+            log('🎮 ¡Tekken: Dark Resurrection arrancó con motor nativo!');
+            updateStatus('Juego en ejecución');
+            setTimeout(hideOverlay, 600);
+          }
+        ],
+        print: function(text) {
+          log('[PPSSPP] ' + text);
+        },
+        printErr: function(text) {
+          console.warn('[PPSSPP ERR] ' + text);
+        }
+      };
+
+      window.Module = Module;
+
+      const script = document.createElement('script');
+      script.src = '/ppsspp/PPSSPPSDL.js';
+      script.onload = () => log('🚀 Motor PPSSPPSDL.js cargado.');
+      script.onerror = () => updateStatus('Error al cargar PPSSPPSDL.js');
+      document.body.appendChild(script);
+    }
+  </script>
+</body>
+</html>

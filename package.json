@@ -1,0 +1,18 @@
+{
+  "name": "tekken-web",
+  "version": "1.0.0",
+  "description": "Tekken: Dark Resurrection - Web Edition (60 FPS)",
+  "main": "server.cjs",
+  "scripts": {
+    "start": "node server.cjs"
+  },
+  "keywords": [
+    "tekken",
+    "webassembly",
+    "wasm",
+    "ppsspp",
+    "webgl"
+  ],
+  "author": "aymaravilez70",
+  "license": "MIT"
+}
