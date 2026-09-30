@@ -39,12 +39,13 @@ function createAdhocServer(existingHttpServer = null, wsPort = PORT) {
     });
   }
 
-  let nextClientNum = 1;
+  let nextClientNum = 10;
   const clients = new Set();
 
   wss.on('connection', (ws, req) => {
     const clientNum = nextClientNum++;
-    const virtualIp = 0x7F000000 | (clientNum & 0xFF); // 127.0.0.X
+    if (nextClientNum > 240) nextClientNum = 10;
+    const virtualIp = 0x7F000000 | (clientNum & 0xFF); // 127.0.0.X (never 127.0.0.1)
 
     const client = {
       ws,
@@ -257,6 +258,7 @@ function startP2PRelay(port = 10555) {
     wss = new WebSocket.Server({ port, handleProtocols: () => 'binary' });
     const peers = new Set();
     const peerLastHello = new Map();
+    const peerLastHelloTime = new Map();
 
     wss.on('connection', (ws, req) => {
       peers.add(ws);
@@ -287,7 +289,20 @@ function startP2PRelay(port = 10555) {
         if (msg.length > 0 && OPCODES[msg[0]]) {
           opName = OPCODES[msg[0]];
           if (msg[0] === 1) { // HELLO
+            const now = Date.now();
+            const lastTime = peerLastHelloTime.get(ws) || 0;
             peerLastHello.set(ws, msg);
+            // Throttle HELLO repeats to at most once every 1.5 seconds to prevent positive feedback loop
+            if (now - lastTime < 1500) {
+              return;
+            }
+            peerLastHelloTime.set(ws, now);
+          } else if (msg[0] === 2) {
+            console.log(`[P2P 10555] ⚔️ ¡SOLICITUD DE PELEA ENVIADA! (${msg.length} bytes)`);
+          } else if (msg[0] === 3) {
+            console.log(`[P2P 10555] 🥊 ¡PELEA ACEPTADA! (${msg.length} bytes)`);
+          } else if (msg[0] === 4) {
+            console.log(`[P2P 10555] ❌ Solicitud cancelada / rechazada (${msg.length} bytes)`);
           }
         }
 
@@ -303,6 +318,7 @@ function startP2PRelay(port = 10555) {
       ws.on('close', () => {
         peers.delete(ws);
         peerLastHello.delete(ws);
+        peerLastHelloTime.delete(ws);
         console.log(`[P2P 10555] [-] Peer desconectado. Restantes: ${peers.size}`);
       });
 
