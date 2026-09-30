@@ -443,11 +443,28 @@
       </div>
 
       <div class="tab-content" id="tab-online">
-        <div class="section-title">Modo Multijugador (Ad-Hoc)</div>
-        <div style="font-size: 13px; color: var(--text-dim); line-height: 1.6;">
-          <p>• <strong>Dentro del juego:</strong> Ve al menú principal ➡️ <strong>NETWORK</strong>.</p>
-          <p>• <strong>Modo Combate:</strong> Uno de los jugadores selecciona <em>Wait for Challenger</em> y el otro <em>Search for Challenger</em>.</p>
-          <p>• <strong>Estado de Red:</strong> Conectado a la red de emulación inalámbrica PSP.</p>
+        <div class="section-title">Modo Multijugador (Ad-Hoc Online)</div>
+        
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;">
+          <div>
+            <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Tu Nickname de Peleador:</label>
+            <input id="playerNickInput" type="text" maxlength="12" placeholder="Tu Nombre" style="width: 100%; background: #0f121d; border: 1px solid var(--border); color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 13px;" onchange="saveNick(this.value)">
+          </div>
+
+          <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 6px; padding: 10px; font-size: 12px; color: #4ade80;">
+            📶 <strong>WLAN PSP:</strong> Activado<br>
+            🌐 <strong>Servidor Ad-Hoc:</strong> socom.cc (Global)<br>
+            🎮 <strong>Modo:</strong> Batalla Inalámbrica 1 vs 1
+          </div>
+        </div>
+
+        <div class="section-title">¿Cómo retar a un amigo?</div>
+        <div style="font-size: 12px; color: var(--text-dim); line-height: 1.6;">
+          <p>1️⃣ Ambos abren la página web y le dan a <strong>JUGAR AHORA</strong>.</p>
+          <p>2️⃣ En el menú principal de Tekken, van a <strong>NETWORK</strong> ➡️ <strong>VS BATTLE</strong>.</p>
+          <p>3️⃣ <strong>Jugador 1:</strong> Selecciona <em>Wait for Challenger</em>.</p>
+          <p>4️⃣ <strong>Jugador 2:</strong> Selecciona <em>Search for Challenger</em>.</p>
+          <p>5️⃣ Se detectan automáticamente, pulsan <strong>Confirmar (A / Z)</strong> ¡y a pelear!</p>
         </div>
       </div>
 
@@ -539,6 +556,20 @@
         main.style.gridTemplateColumns = '1fr';
       }
     }
+
+    function saveNick(val) {
+      if (val && val.trim()) {
+        localStorage.setItem('tekken_nick', val.trim());
+        log('🎮 Nickname guardado: ' + val.trim());
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const inp = document.getElementById('playerNickInput');
+      if (inp) {
+        inp.value = localStorage.getItem('tekken_nick') || ('Player_' + Math.floor(Math.random() * 899 + 100));
+      }
+    });
 
     window.addEventListener("gamepadconnected", (e) => {
       document.getElementById('padDot').style.background = '#22c55e';
@@ -701,7 +732,15 @@
                 try { FS.writeFile(p, new Uint8Array(0)); } catch(e) {}
               }
 
-              // Write initial ppsspp.ini in full KIOSK / AUTOPLAY mode (Clean Native Web View)
+              const playerNick = localStorage.getItem('tekken_nick') || ('Player_' + Math.floor(Math.random() * 899 + 100));
+              const randByte = () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+              let savedMac = localStorage.getItem('tekken_mac');
+              if (!savedMac) {
+                savedMac = `02:00:00:${randByte()}:${randByte()}:${randByte()}`;
+                localStorage.setItem('tekken_mac', savedMac);
+              }
+              const adhocServer = localStorage.getItem('tekken_server') || 'socom.cc';
+
               const iniContent = `[General]
 FirstRun = False
 RunCount = 100
@@ -746,10 +785,20 @@ ShowFPSCounter = 0
 [SystemParam]
 PSPModel = 0
 PSPFirmwareVersion = 660
-NickName = Aymar
+NickName = ${playerNick}
+MacAddress = ${savedMac}
 Language = 1
 ButtonPreference = 1
 EncryptSave = False
+
+[Network]
+EnableWlan = True
+proAdhocServer = ${adhocServer}
+PortOffset = 10000
+MinTimeout = 0
+ForcedFirstConnect = True
+EnableBuiltinAdhocServer = True
+WlanAdhocChannel = 0
 
 [UI]
 PauseMenuExitsEmulator = False
