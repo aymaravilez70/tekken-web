@@ -461,10 +461,9 @@
         <div class="section-title">¿Cómo retar a un amigo?</div>
         <div style="font-size: 12px; color: var(--text-dim); line-height: 1.6;">
           <p>1️⃣ Ambos abren la página web y le dan a <strong>JUGAR AHORA</strong>.</p>
-          <p>2️⃣ En el menú principal de Tekken, van a <strong>NETWORK</strong> ➡️ <strong>VS BATTLE</strong>.</p>
-          <p>3️⃣ <strong>Jugador 1:</strong> Selecciona <em>Wait for Challenger</em>.</p>
-          <p>4️⃣ <strong>Jugador 2:</strong> Selecciona <em>Search for Challenger</em>.</p>
-          <p>5️⃣ Se detectan automáticamente, pulsan <strong>Confirmar (A / Z)</strong> ¡y a pelear!</p>
+          <p>2️⃣ En el menú principal de Tekken, van a <strong>NETWORK</strong> ➡️ <strong>BATTLE LOBBY</strong>.</p>
+          <p>3️⃣ Una vez dentro del lobby, uno crea la sala o reta al otro jugador.</p>
+          <p>4️⃣ ¡Aceptan el reto y a pelear!</p>
         </div>
       </div>
 
@@ -511,6 +510,10 @@
       const line = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ');
       if (line.includes('[PPSSPP') || line.includes('[ADHOC')) {
         sendToServer(line);
+        if (logBox) {
+          logBox.textContent += '\n' + line;
+          logBox.scrollTop = logBox.scrollHeight;
+        }
       }
       _origLog.apply(console, args);
     };
@@ -830,6 +833,7 @@ MacAddress = ${savedMac}
 Language = 1
 ButtonPreference = 1
 EncryptSave = False
+WlanAdhocChannel = 1
 
 [Network]
 EnableWlan = True
@@ -838,7 +842,7 @@ PortOffset = 10000
 MinTimeout = 0
 ForcedFirstConnect = True
 EnableBuiltinAdhocServer = False
-WlanAdhocChannel = 0
+WlanAdhocChannel = 1
 
 [UI]
 PauseMenuExitsEmulator = False
