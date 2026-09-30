@@ -27,13 +27,13 @@ function createAdhocServer(existingHttpServer = null, wsPort = PORT) {
   let wss;
 
   if (server) {
-    wss = new WebSocket.Server({ server });
+    wss = new WebSocket.Server({ server, handleProtocols: () => 'binary' });
   } else {
     server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'online', service: 'coldbird-adhoc-relay', time: Date.now() }));
     });
-    wss = new WebSocket.Server({ server });
+    wss = new WebSocket.Server({ server, handleProtocols: () => 'binary' });
     server.listen(wsPort, () => {
       console.log(`⚡ [ADHOC RELAY] Servidor Ad-Hoc WebSocket activo en puerto ${wsPort}`);
     });
@@ -66,6 +66,12 @@ function createAdhocServer(existingHttpServer = null, wsPort = PORT) {
         data = Buffer.from(data);
       }
       if (data.length < 1) return;
+
+      // Handle Emscripten SOCKFS handshake header [255, 255, 255, 255, 'p', 'o', 'r', 't', ...]
+      if (data.length === 10 && data[0] === 255 && data[1] === 255 && data[2] === 255 && data[3] === 255) {
+        console.log(`[ADHOC] 🤝 Emscripten SOCKFS handshake recibido para #${client.id}`);
+        return;
+      }
 
       const opcode = data[0];
 
