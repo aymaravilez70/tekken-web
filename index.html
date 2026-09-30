@@ -453,7 +453,7 @@
 
           <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 6px; padding: 10px; font-size: 12px; color: #4ade80;">
             📶 <strong>WLAN PSP:</strong> Activado<br>
-            🌐 <strong>Servidor Ad-Hoc:</strong> socom.cc (Global)<br>
+            🌐 <strong>Servidor Relay:</strong> 38.54.80.95 (IP Directa Tekken)<br>
             🎮 <strong>Modo:</strong> Batalla Inalámbrica 1 vs 1
           </div>
         </div>
@@ -739,7 +739,7 @@
                 savedMac = `02:00:00:${randByte()}:${randByte()}:${randByte()}`;
                 localStorage.setItem('tekken_mac', savedMac);
               }
-              const adhocServer = localStorage.getItem('tekken_server') || 'socom.cc';
+              const adhocServer = localStorage.getItem('tekken_server') || '38.54.80.95';
 
               const iniContent = `[General]
 FirstRun = False
