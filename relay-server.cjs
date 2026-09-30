@@ -238,26 +238,71 @@ function createAdhocServer(existingHttpServer = null, wsPort = PORT) {
   return { server, wss };
 }
 
+const OPCODES = {
+  0: 'PING',
+  1: 'HELLO',
+  2: 'JOIN (Solicitud de Pelea)',
+  3: 'ACCEPT (Aceptó Pelea)',
+  4: 'CANCEL',
+  5: 'BULK',
+  6: 'BULK_ABORT',
+  7: 'BIRTH',
+  8: 'DEATH',
+  9: 'BYE'
+};
+
 function startP2PRelay(port = 10555) {
   let wss;
   try {
     wss = new WebSocket.Server({ port, handleProtocols: () => 'binary' });
     const peers = new Set();
+    const peerLastHello = new Map();
 
     wss.on('connection', (ws, req) => {
       peers.add(ws);
       console.log(`[P2P 10555] [+] Peer conectado desde ${req.socket.remoteAddress}. Total peers: ${peers.size}`);
 
+      // 1. Send Emscripten SOCKFS port handshake to the newly connected peer so it recognizes port 10555 immediately
+      const portHandshake = Buffer.from([255, 255, 255, 255, 112, 111, 114, 116, (port & 0xFF00) >> 8, port & 0xFF]);
+      ws.send(portHandshake, { binary: true });
+
+      // 2. Replay cached HELLO from all other peers so discovery is INSTANT (<100ms)
+      for (const [otherWs, helloData] of peerLastHello.entries()) {
+        if (otherWs !== ws && otherWs.readyState === WebSocket.OPEN && ws.readyState === WebSocket.OPEN) {
+          console.log(`[P2P 10555] ⚡ Reenviando HELLO previo (${helloData.length} bytes) para sincronización instantánea`);
+          ws.send(helloData, { binary: true });
+        }
+      }
+
       ws.on('message', (msg, isBinary) => {
+        if (!Buffer.isBuffer(msg)) msg = Buffer.from(msg);
+
+        // Filter out incoming Emscripten SOCKFS port handshake headers so they don't get delivered as bogus packets
+        if (msg.length === 10 && msg[0] === 255 && msg[1] === 255 && msg[2] === 255 && msg[3] === 255) {
+          console.log(`[P2P 10555] 🤝 Emscripten SOCKFS handshake recibido`);
+          return;
+        }
+
+        let opName = 'DATA';
+        if (msg.length > 0 && OPCODES[msg[0]]) {
+          opName = OPCODES[msg[0]];
+          if (msg[0] === 1) { // HELLO
+            peerLastHello.set(ws, msg);
+          }
+        }
+
+        console.log(`[P2P 10555] 📦 Paquete (${msg.length} bytes): ${opName} -> Reenviando a ${peers.size - 1} peer(s)`);
+
         for (const peer of peers) {
           if (peer !== ws && peer.readyState === WebSocket.OPEN) {
-            peer.send(msg, { binary: isBinary });
+            peer.send(msg, { binary: true });
           }
         }
       });
 
       ws.on('close', () => {
         peers.delete(ws);
+        peerLastHello.delete(ws);
         console.log(`[P2P 10555] [-] Peer desconectado. Restantes: ${peers.size}`);
       });
 
