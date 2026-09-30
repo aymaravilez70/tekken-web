@@ -798,7 +798,7 @@ proAdhocServer = ${adhocServer}
 PortOffset = 10000
 MinTimeout = 0
 ForcedFirstConnect = True
-EnableBuiltinAdhocServer = True
+EnableBuiltinAdhocServer = False
 WlanAdhocChannel = 0
 
 [UI]
@@ -838,10 +838,23 @@ ShowDeveloperMenu = False
         }
       };
 
+      // Intercept WebSockets created by Emscripten to inspect and secure them
+      const NativeWebSocket = window.WebSocket;
+      window.WebSocket = function(url, protocols) {
+        console.log(`[ADHOC WS] Intento de conexión socket a: ${url}`);
+        if (window.location.protocol === 'https:' && url.startsWith('ws://')) {
+          const cloudRelay = localStorage.getItem('tekken_cloud_relay') || 'wss://tekken-relay.glitch.me/';
+          console.log(`[ADHOC WS] Redirigiendo socket insecure a Relay Seguro WSS: ${cloudRelay}`);
+          url = cloudRelay;
+        }
+        return new NativeWebSocket(url, protocols);
+      };
+      window.WebSocket.prototype = NativeWebSocket.prototype;
+
       window.Module = Module;
 
       const script = document.createElement('script');
-      script.src = '/ppsspp/PPSSPPSDL.js';
+      script.src = '/ppsspp/PPSSPPSDL.js?v=adhoc_' + Date.now();
       script.onload = () => log('🚀 Motor PPSSPPSDL.js cargado.');
       script.onerror = () => updateStatus('Error al cargar PPSSPPSDL.js');
       document.body.appendChild(script);
