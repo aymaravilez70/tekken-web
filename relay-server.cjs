@@ -22,6 +22,24 @@ function macToStr(buf) {
   return Array.from(buf.subarray(0, 6)).map(b => b.toString(16).padStart(2, '0')).join(':');
 }
 
+const macToVirtualIp = new Map();
+let nextIpSuffix = 10;
+
+function getVirtualIpForMac(macBuf) {
+  const macKey = macToStr(macBuf);
+  if (macKey === '00:00:00:00:00:00') {
+    return 0x7F00000A; // 127.0.0.10 fallback
+  }
+  if (!macToVirtualIp.has(macKey)) {
+    const suffix = nextIpSuffix++;
+    if (nextIpSuffix > 240) nextIpSuffix = 10;
+    const ip = 0x7F000000 | (suffix & 0xFF);
+    macToVirtualIp.set(macKey, ip);
+    console.log(`[ADHOC] 📌 IP fija asignada para MAC ${macKey} -> 127.0.0.${suffix}`);
+  }
+  return macToVirtualIp.get(macKey);
+}
+
 function createAdhocServer(existingHttpServer = null, wsPort = PORT) {
   let server = existingHttpServer;
   let wss;
@@ -39,28 +57,23 @@ function createAdhocServer(existingHttpServer = null, wsPort = PORT) {
     });
   }
 
-  let nextClientNum = 10;
   const clients = new Set();
 
   wss.on('connection', (ws, req) => {
-    const clientNum = nextClientNum++;
-    if (nextClientNum > 240) nextClientNum = 10;
-    const virtualIp = 0x7F000000 | (clientNum & 0xFF); // 127.0.0.X (never 127.0.0.1)
-
     const client = {
       ws,
-      id: clientNum,
-      virtualIp,
+      id: 10,
+      virtualIp: 0x7F00000A,
       mac: Buffer.alloc(6),
       name: Buffer.alloc(128),
-      nick: `Player_${clientNum}`,
+      nick: 'Player',
       game: 'ULES00356', // Tekken DR default
       group: null,
       lastPing: Date.now()
     };
 
     clients.add(client);
-    console.log(`[ADHOC] [+] Nuevo cliente conectado #${client.id} (IP asignada: 127.0.0.${clientNum & 0xFF})`);
+    console.log(`[ADHOC] [+] Nuevo cliente conectado`);
 
     ws.on('message', (data, isBinary) => {
       if (!Buffer.isBuffer(data)) {
@@ -86,6 +99,17 @@ function createAdhocServer(existingHttpServer = null, wsPort = PORT) {
       if (opcode === OPCODE_LOGIN) {
         if (data.length >= 7) {
           data.copy(client.mac, 0, 1, 7);
+          client.virtualIp = getVirtualIpForMac(client.mac);
+          client.id = client.virtualIp & 0xFF;
+
+          // Close and remove any existing stale client with the same MAC:
+          for (const existing of clients) {
+            if (existing !== client && macToStr(existing.mac) === macToStr(client.mac)) {
+              console.log(`[ADHOC] 🔄 Reemplazando sesión anterior para MAC ${macToStr(client.mac)}`);
+              try { existing.ws.close(); } catch (e) {}
+              clients.delete(existing);
+            }
+          }
         }
         if (data.length >= 135) {
           data.copy(client.name, 0, 7, 135);
@@ -94,7 +118,7 @@ function createAdhocServer(existingHttpServer = null, wsPort = PORT) {
         if (data.length >= 144) {
           client.game = data.subarray(135, 144).toString('ascii').replace(/\0/g, '').trim();
         }
-        console.log(`[ADHOC] 🎮 LOGIN: "${client.nick}" [MAC: ${macToStr(client.mac)}] Juego: ${client.game}`);
+        console.log(`[ADHOC] 🎮 LOGIN: "${client.nick}" [MAC: ${macToStr(client.mac)}] IP: 127.0.0.${client.id} Juego: ${client.game}`);
         return;
       }
 
@@ -268,10 +292,10 @@ function startP2PRelay(port = 10555) {
       const portHandshake = Buffer.from([255, 255, 255, 255, 112, 111, 114, 116, (port & 0xFF00) >> 8, port & 0xFF]);
       ws.send(portHandshake, { binary: true });
 
-      // 2. Replay cached HELLO from all other peers so discovery is INSTANT (<100ms)
+      // 2. Replay all cached 221-byte player card HELLOs from existing peers so the newcomer sees all opponents in < 50ms
       for (const [otherWs, helloData] of peerLastHello.entries()) {
-        if (otherWs !== ws && otherWs.readyState === WebSocket.OPEN && ws.readyState === WebSocket.OPEN) {
-          console.log(`[P2P 10555] ⚡ Reenviando HELLO previo (${helloData.length} bytes) para sincronización instantánea`);
+        if (otherWs !== ws && otherWs.readyState === WebSocket.OPEN && ws.readyState === WebSocket.OPEN && helloData.length > 5) {
+          console.log(`[P2P 10555] ⚡ Reenviando perfil HELLO previo (${helloData.length} bytes) para sincronización instantánea`);
           ws.send(helloData, { binary: true });
         }
       }
@@ -285,25 +309,32 @@ function startP2PRelay(port = 10555) {
           return;
         }
 
-        let opName = 'DATA';
-        if (msg.length > 0 && OPCODES[msg[0]]) {
-          opName = OPCODES[msg[0]];
-          if (msg[0] === 1) { // HELLO
-            const now = Date.now();
-            const lastTime = peerLastHelloTime.get(ws) || 0;
-            peerLastHello.set(ws, msg);
-            // Throttle HELLO repeats to at most once every 1.5 seconds to prevent positive feedback loop
-            if (now - lastTime < 1500) {
-              return;
-            }
-            peerLastHelloTime.set(ws, now);
-          } else if (msg[0] === 2) {
-            console.log(`[P2P 10555] ⚔️ ¡SOLICITUD DE PELEA ENVIADA! (${msg.length} bytes)`);
-          } else if (msg[0] === 3) {
-            console.log(`[P2P 10555] 🥊 ¡PELEA ACEPTADA! (${msg.length} bytes)`);
-          } else if (msg[0] === 4) {
-            console.log(`[P2P 10555] ❌ Solicitud cancelada / rechazada (${msg.length} bytes)`);
+        const opcode = msg.length > 0 ? msg[0] : -1;
+        const opName = OPCODES[opcode] || 'DATA';
+
+        // 1. Drop dummy initial HELLO (length <= 5) without player profile
+        if (opcode === 1 && msg.length <= 5) {
+          return;
+        }
+
+        // 2. Real HELLO with Player Profile (length > 5, typically 221 bytes)
+        if (opcode === 1) {
+          const now = Date.now();
+          const lastTime = peerLastHelloTime.get(ws) || 0;
+          peerLastHello.set(ws, msg);
+
+          // Only throttle subsequent periodic repeats (3.5s); NEVER throttle the first real HELLO (lastTime === 0)
+          if (lastTime > 0 && (now - lastTime < 3500)) {
+            return;
           }
+          peerLastHelloTime.set(ws, now);
+          console.log(`[P2P 10555] 👤 Perfil HELLO transmitido (${msg.length} bytes) -> Enviando a ${peers.size - 1} rival(es)`);
+        } else if (opcode === 2) {
+          console.log(`[P2P 10555] ⚔️ ¡SOLICITUD DE PELEA ENVIADA! (${msg.length} bytes)`);
+        } else if (opcode === 3) {
+          console.log(`[P2P 10555] 🥊 ¡PELEA ACEPTADA! (${msg.length} bytes)`);
+        } else if (opcode === 4) {
+          console.log(`[P2P 10555] ❌ Solicitud cancelada / rechazada (${msg.length} bytes)`);
         }
 
         console.log(`[P2P 10555] 📦 Paquete (${msg.length} bytes): ${opName} -> Reenviando a ${peers.size - 1} peer(s)`);
