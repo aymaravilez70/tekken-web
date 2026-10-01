@@ -40,6 +40,21 @@ function getVirtualIpForMac(macBuf) {
   return macToVirtualIp.get(macKey);
 }
 
+function getVirtualIpStrForMac(macInput) {
+  if (!macInput) return '';
+  let buf;
+  if (Buffer.isBuffer(macInput)) {
+    buf = macInput;
+  } else if (typeof macInput === 'string') {
+    const parts = macInput.split(':').map(h => parseInt(h, 16) || 0);
+    buf = Buffer.from(parts.slice(0, 6));
+  } else {
+    return '';
+  }
+  const ipInt = getVirtualIpForMac(buf);
+  return `127.0.0.${ipInt & 0xFF}`;
+}
+
 function createAdhocServer(existingHttpServer = null, wsPort = PORT) {
   let server = existingHttpServer;
   let wss;
@@ -281,31 +296,46 @@ function startP2PRelay(port = 10555) {
   try {
     wss = new WebSocket.Server({ port, handleProtocols: () => 'binary' });
     const peers = new Set();
-    const peerLastHello = new Map();
-    const peerLastHelloTime = new Map();
+    const cachedHelloByMac = new Map(); // senderMac -> Buffer
 
     wss.on('connection', (ws, req) => {
-      peers.add(ws);
-      console.log(`[P2P 10555] [+] Peer conectado desde ${req.socket.remoteAddress}. Total peers: ${peers.size}`);
+      let target = '';
+      let senderMac = '';
+      try {
+        const urlObj = new URL(req.url, 'http://127.0.0.1:10555');
+        target = urlObj.searchParams.get('target') || '';
+        senderMac = urlObj.searchParams.get('mac') || '';
+      } catch(e) {}
 
-      // 1. Send Emscripten SOCKFS port handshake to the newly connected peer so it recognizes port 10555 immediately
+      const senderIp = senderMac ? getVirtualIpStrForMac(senderMac) : '';
+      ws.target = target;
+      ws.senderMac = senderMac;
+      ws.senderIp = senderIp;
+
+      peers.add(ws);
+      console.log(`[P2P 10555] [+] Peer conectado: MAC=${senderMac || 'anon'} IP=${senderIp || '?'} -> Target=${target || 'all'} (Total peers: ${peers.size})`);
+
+      // 1. Send Emscripten SOCKFS port handshake to the newly connected peer
       const portHandshake = Buffer.from([255, 255, 255, 255, 112, 111, 114, 116, (port & 0xFF00) >> 8, port & 0xFF]);
       ws.send(portHandshake, { binary: true });
 
-      // 2. Replay all cached 221-byte player card HELLOs from existing peers so the newcomer sees all opponents in < 50ms
-      for (const [otherWs, helloData] of peerLastHello.entries()) {
-        if (otherWs !== ws && otherWs.readyState === WebSocket.OPEN && ws.readyState === WebSocket.OPEN && helloData.length > 5) {
-          console.log(`[P2P 10555] ⚡ Reenviando perfil HELLO previo (${helloData.length} bytes) para sincronización instantánea`);
-          ws.send(helloData, { binary: true });
+      // 2. Replay cached player card HELLO to the newcomer immediately (< 10ms)
+      for (const [otherMac, helloData] of cachedHelloByMac.entries()) {
+        if (otherMac !== senderMac && helloData.length > 5 && ws.readyState === WebSocket.OPEN) {
+          const otherIp = getVirtualIpStrForMac(otherMac);
+          // If socket is targeted, only send matching opponent's HELLO
+          if (!target || target === otherIp) {
+            console.log(`[P2P 10555] ⚡ Reenviando perfil HELLO previo de ${otherMac} (${helloData.length} bytes) a nuevo peer`);
+            ws.send(helloData, { binary: true });
+          }
         }
       }
 
       ws.on('message', (msg, isBinary) => {
         if (!Buffer.isBuffer(msg)) msg = Buffer.from(msg);
 
-        // Filter out incoming Emscripten SOCKFS port handshake headers so they don't get delivered as bogus packets
+        // Filter out incoming Emscripten SOCKFS port handshake headers
         if (msg.length === 10 && msg[0] === 255 && msg[1] === 255 && msg[2] === 255 && msg[3] === 255) {
-          console.log(`[P2P 10555] 🤝 Emscripten SOCKFS handshake recibido`);
           return;
         }
 
@@ -317,40 +347,53 @@ function startP2PRelay(port = 10555) {
           return;
         }
 
-        // 2. Real HELLO with Player Profile (length > 5, typically 221 bytes)
+        // 2. Cache real HELLO with Player Profile (length > 5, typically 221 bytes)
         if (opcode === 1) {
-          const now = Date.now();
-          const lastTime = peerLastHelloTime.get(ws) || 0;
-          peerLastHello.set(ws, msg);
-
-          // Only throttle subsequent periodic repeats (3.5s); NEVER throttle the first real HELLO (lastTime === 0)
-          if (lastTime > 0 && (now - lastTime < 3500)) {
-            return;
+          if (ws.senderMac) {
+            cachedHelloByMac.set(ws.senderMac, msg);
           }
-          peerLastHelloTime.set(ws, now);
-          console.log(`[P2P 10555] 👤 Perfil HELLO transmitido (${msg.length} bytes) -> Enviando a ${peers.size - 1} rival(es)`);
+          console.log(`[P2P 10555] 👤 Perfil HELLO transmitido de ${ws.senderMac || ws.senderIp || 'peer'} (${msg.length} bytes)`);
         } else if (opcode === 2) {
-          console.log(`[P2P 10555] ⚔️ ¡SOLICITUD DE PELEA ENVIADA! (${msg.length} bytes)`);
+          console.log(`[P2P 10555] ⚔️ ¡SOLICITUD DE PELEA ENVIADA! (${msg.length} bytes) de ${ws.senderIp} -> ${ws.target || 'rival'}`);
         } else if (opcode === 3) {
-          console.log(`[P2P 10555] 🥊 ¡PELEA ACEPTADA! (${msg.length} bytes)`);
+          console.log(`[P2P 10555] 🥊 ¡PELEA ACEPTADA! (${msg.length} bytes) de ${ws.senderIp} -> ${ws.target || 'rival'}`);
         } else if (opcode === 4) {
           console.log(`[P2P 10555] ❌ Solicitud cancelada / rechazada (${msg.length} bytes)`);
         }
 
-        console.log(`[P2P 10555] 📦 Paquete (${msg.length} bytes): ${opName} -> Reenviando a ${peers.size - 1} peer(s)`);
-
+        // 3. Targeted Routing: Forward strictly to opponent, avoiding self-echos and duplicate sockets
+        let deliveredCount = 0;
         for (const peer of peers) {
-          if (peer !== ws && peer.readyState === WebSocket.OPEN) {
+          if (peer === ws || peer.readyState !== WebSocket.OPEN) continue;
+
+          // Never send back to the same player/tab (avoid echo loops)
+          if (ws.senderMac && peer.senderMac && peer.senderMac === ws.senderMac) continue;
+
+          // If this sender socket has a specific target IP, match peer's sender IP or MAC
+          if (ws.target && peer.senderIp && peer.senderIp !== ws.target) continue;
+
+          // If the recipient socket is dedicated to a target IP, it must match sender's IP
+          if (peer.target && ws.senderIp && peer.target !== ws.senderIp) continue;
+
+          peer.send(msg, { binary: true });
+          deliveredCount++;
+        }
+
+        // Fallback: If no peer matched strict target routing (e.g. peer connected before params were known),
+        // deliver to any peer of a different MAC
+        if (deliveredCount === 0) {
+          for (const peer of peers) {
+            if (peer === ws || peer.readyState !== WebSocket.OPEN) continue;
+            if (ws.senderMac && peer.senderMac && peer.senderMac === ws.senderMac) continue;
             peer.send(msg, { binary: true });
+            deliveredCount++;
           }
         }
       });
 
       ws.on('close', () => {
         peers.delete(ws);
-        peerLastHello.delete(ws);
-        peerLastHelloTime.delete(ws);
-        console.log(`[P2P 10555] [-] Peer desconectado. Restantes: ${peers.size}`);
+        console.log(`[P2P 10555] [-] Peer desconectado (${ws.senderMac || 'anon'}). Restantes: ${peers.size}`);
       });
 
       ws.on('error', (err) => {

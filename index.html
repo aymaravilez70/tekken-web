@@ -774,13 +774,19 @@
                 try { FS.writeFile(p, new Uint8Array(0)); } catch(e) {}
               }
 
-              const playerNick = localStorage.getItem('tekken_nick') || ('Player_' + Math.floor(Math.random() * 899 + 100));
               const randByte = () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
-              let savedMac = localStorage.getItem('tekken_mac');
+              let savedMac = sessionStorage.getItem('tekken_mac');
               if (!savedMac) {
                 savedMac = `02:00:00:${randByte()}:${randByte()}:${randByte()}`;
-                localStorage.setItem('tekken_mac', savedMac);
+                sessionStorage.setItem('tekken_mac', savedMac);
               }
+              let playerNick = sessionStorage.getItem('tekken_nick');
+              if (!playerNick) {
+                playerNick = 'Player_' + Math.floor(Math.random() * 899 + 100);
+                sessionStorage.setItem('tekken_nick', playerNick);
+              }
+              window.__tekken_mac = savedMac;
+              window.__tekken_nick = playerNick;
               const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
               const adhocServer = isLocalHost ? '127.0.0.1' : (localStorage.getItem('tekken_server') || '38.54.80.95');
 
@@ -885,6 +891,9 @@ ShowDeveloperMenu = False
       // Intercept WebSockets created by Emscripten to inspect and secure them
       const NativeWebSocket = window.WebSocket;
       window.WebSocket = function(url, protocols) {
+        if (typeof url === 'string' && url.includes(':10555') && window.__tekken_mac) {
+          url += (url.includes('?') ? '&' : '?') + 'mac=' + encodeURIComponent(window.__tekken_mac);
+        }
         console.log(`[ADHOC WS] Intento de conexión socket a: ${url}`);
         if (window.location.protocol === 'https:' && url.startsWith('ws://')) {
           const cloudRelay = localStorage.getItem('tekken_cloud_relay') || 'wss://tekken-relay.glitch.me/';
